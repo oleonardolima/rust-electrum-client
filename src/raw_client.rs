@@ -1429,9 +1429,12 @@ mod test {
     use super::{ElectrumSslStream, RawClient};
     use crate::api::ElectrumApi;
 
+    fn get_test_server() -> String {
+        std::env::var("TEST_ELECTRUM_SERVER").unwrap_or("fortress.qtornado.com:443".into())
+    }
+
     fn get_test_client() -> RawClient<ElectrumSslStream> {
-        let server =
-            std::env::var("TEST_ELECTRUM_SERVER").unwrap_or("fortress.qtornado.com:443".into());
+        let server = get_test_server();
         RawClient::new_ssl(&*server, false, None).unwrap()
     }
 
@@ -1927,7 +1930,8 @@ mod test {
             Some("Bearer test-token-123".to_string())
         });
 
-        let mut client = RawClient::new(get_test_server(), None).unwrap();
+        let server = get_test_server();
+        let mut client = RawClient::new_ssl(&*server, false, None).unwrap();
         client = client.with_auth_provider(Some(provider));
 
         // Make a request - provider should be called
@@ -1947,7 +1951,8 @@ mod test {
 
         let provider = Arc::new(move || Some(token_clone.read().unwrap().clone()));
 
-        let mut client = RawClient::new(get_test_server(), None).unwrap();
+        let server = get_test_server();
+        let mut client = RawClient::new_ssl(&*server, false, None).unwrap();
         client = client.with_auth_provider(Some(provider.clone()));
 
         // Make first request with initial token
@@ -1969,7 +1974,8 @@ mod test {
 
         let provider = Arc::new(|| None);
 
-        let mut client = RawClient::new(get_test_server(), None).unwrap();
+        let server = get_test_server();
+        let mut client = RawClient::new_ssl(&*server, false, None).unwrap();
         client = client.with_auth_provider(Some(provider));
 
         // Should still work when provider returns None
@@ -1983,7 +1989,8 @@ mod test {
 
         let provider = Arc::new(|| Some("Bearer test".to_string()));
 
-        let client = RawClient::new(get_test_server(), None)
+        let server = get_test_server();
+        let client = RawClient::new_ssl(&*server, false, None)
             .unwrap()
             .with_auth_provider(Some(provider.clone()));
 
