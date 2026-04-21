@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0]
+
+### Added
+
+ - Add new `justfile` #195
+ - Add new simpler feature names `openssl`, `rustls`, and `rustls-ring` #182
+ - Add support for [Electrum Protocol v1.6](https://electrum-protocol.readthedocs.io/en/latest/protocol-changes.html#version-1-6) #190
+ - Add automatic `server.version` negotiation on connect, exposed via a new `protocol_version()` method and `CLIENT_NAME`/`PROTOCOL_VERSION_MIN`/`PROTOCOL_VERSION_MAX` constants #190
+ - Add new `mempool_get_info` method returning `mempoolminfee`, `minrelaytxfee`, and `incrementalrelayfee` #190
+ - Add new `transaction_broadcast_package` method for package relay (CPFP) #190
+ - Add new optional `EstimationMode` (`Conservative`/`Economical`) parameter on `estimate_fee` #190
+ - Add new `AuthProvider` type alias (`Arc<dyn Fn() -> Option<String> + Send + Sync>`) for dynamic authorization token support (e.g. JWT Bearer, API keys, OAuth) #194
+
+### Fixed
+
+ - Fix `bitcoin::block::Header` documentation link #195
+
+### Changed
+
+ - Change `ConfigBuilder::timeout()` to accept `Option<Duration>` #180
+ - Remove `Client` dependency on the `proxy` feature #182
+ - The `Client` constructors (`new`, `new_ssl`, `new_ssl_from_stream`, `new_proxy`) now fail if protocol version negotiation fails #190
+ - The `estimate_fee` now takes `Option<EstimationMode>` as its second parameter #190
+ - Remove `minimal`, `debug-calls` features #182
+ - Remove conditional compilation of `ElectrumApi::calls_made` #182
+ - `ConfigBuilder` now accepts an optional `AuthProvider` via `authorization_provider()`, enabling token-refresh patterns without reconnecting #194
+ - `RawClient` and `ClientType::from_config` updated to propagate the auth provider across all transport backends (TCP, SSL, SOCKS5) #194
+
 ## [0.24.1]
  - Default to `ring` if multiple `rustls` features are set #183
 
@@ -63,4 +91,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.23.1]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.23.0...0.23.1
 [0.24.0]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.23.1...0.24.0
 [0.24.1]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.24.0...0.24.1
-[Unreleased]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.24.1...HEAD
+[0.25.0]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.24.1...0.25.0
+[Unreleased]: https://github.com/bitcoindevkit/rust-electrum-client/compare/0.25.0...HEAD
