@@ -14,6 +14,13 @@ Bitcoin Electrum client library. Supports plaintext, TLS and Onion servers.
 
 This library should compile with any combination of features with Rust 1.75.0.
 
+To build with the MSRV you will need to pin dependencies by running:
+
+``` bash
+cargo update -p openssl --precise "0.10.78"
+cargo update -p openssl-sys --precise "0.9.114"
+```
+
 ## License
 
 Licensed under either of
