@@ -648,6 +648,13 @@ impl<S: Read + Write> RawClient<S> {
     ///
     /// [`ClientType`]: crate::ClientType
     fn negotiate_protocol_version(self) -> Result<Self, Error> {
+        let response = self.request_server_version()?;
+
+        self.cache_protocol_version(response.protocol_version)?;
+        Ok(self)
+    }
+
+    fn request_server_version(&self) -> Result<ServerVersionRes, Error> {
         let version_range = vec![
             PROTOCOL_VERSION_MIN.to_string(),
             PROTOCOL_VERSION_MAX.to_string(),
@@ -661,10 +668,14 @@ impl<S: Read + Write> RawClient<S> {
             ],
         );
         let result = self.call(req)?;
-        let response: ServerVersionRes = serde_json::from_value(result)?;
 
-        *self.protocol_version.lock()? = Some(response.protocol_version);
-        Ok(self)
+        Ok(serde_json::from_value(result)?)
+    }
+
+    fn cache_protocol_version(&self, protocol_version: String) -> Result<String, Error> {
+        *self.protocol_version.lock()? = Some(protocol_version.clone());
+
+        Ok(protocol_version)
     }
 
     fn _reader_thread(&self, until_message: Option<usize>) -> Result<serde_json::Value, Error> {
@@ -1398,6 +1409,16 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         Ok(serde_json::from_value(result)?)
     }
 
+    fn protocol_version(&self) -> Result<String, Error> {
+        if let Some(protocol_version) = self.protocol_version.lock()?.clone() {
+            return Ok(protocol_version);
+        }
+
+        let response = self.request_server_version()?;
+
+        self.cache_protocol_version(response.protocol_version)
+    }
+
     fn mempool_get_info(&self) -> Result<MempoolInfoRes, Error> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -1427,7 +1448,11 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
+    use std::{
+        io::{self, Cursor, Read, Write},
+        str::FromStr,
+        sync::{Arc, Mutex},
+    };
 
     use crate::utils;
 
@@ -1440,6 +1465,60 @@ mod test {
     //
     // here's an useful list of live servers: https://1209k.com/bitcoin-eye/ele.php.
     const DEFAULT_TEST_ELECTRUM_SERVER: &str = "fortress.qtornado.com:443";
+
+    #[derive(Clone)]
+    struct MockStream {
+        responses: Arc<Mutex<Cursor<Vec<u8>>>>,
+        requests: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl MockStream {
+        fn new(responses: impl Into<Vec<u8>>) -> Self {
+            Self {
+                responses: Arc::new(Mutex::new(Cursor::new(responses.into()))),
+                requests: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn written_requests(&self) -> Vec<serde_json::Value> {
+            let requests = self.requests.lock().unwrap().clone();
+            let requests = String::from_utf8(requests).unwrap();
+
+            requests
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect()
+        }
+    }
+
+    impl Read for MockStream {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.responses.lock().unwrap().read(buf)
+        }
+    }
+
+    impl Write for MockStream {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.requests.lock().unwrap().extend_from_slice(buf);
+
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn server_version_response(id: usize, protocol_version: &str) -> String {
+        format!(
+            r#"{{"jsonrpc":"2.0","id":{id},"result":["ElectrumX 1.18.0","{protocol_version}"]}}"#
+        ) + "\n"
+    }
+
+    fn assert_server_version_request(request: &serde_json::Value) {
+        assert_eq!(request["method"], "server.version");
+        assert_eq!(request["params"], serde_json::json!(["", ["1.4", "1.6"]]));
+    }
 
     fn get_test_auth_client(
         authorization_provider: Option<AuthProvider>,
@@ -1457,6 +1536,37 @@ mod test {
 
         RawClient::new_ssl(&*server, false, None, None)
             .expect("should build the `RawClient` successfully!")
+    }
+
+    #[test]
+    fn test_protocol_version_returns_negotiated_version_without_new_request() {
+        let stream = MockStream::new(server_version_response(0, "1.6"));
+        let stream_handle = stream.clone();
+        let client = RawClient::from(stream)
+            .negotiate_protocol_version()
+            .unwrap();
+
+        assert_eq!(client.protocol_version().unwrap(), "1.6");
+        assert_eq!(client.calls_made().unwrap(), 1);
+
+        let requests = stream_handle.written_requests();
+        assert_eq!(requests.len(), 1);
+        assert_server_version_request(&requests[0]);
+    }
+
+    #[test]
+    fn test_protocol_version_fetches_and_caches_missing_version() {
+        let stream = MockStream::new(server_version_response(0, "1.6"));
+        let stream_handle = stream.clone();
+        let client = RawClient::from(stream);
+
+        assert_eq!(client.protocol_version().unwrap(), "1.6");
+        assert_eq!(client.protocol_version().unwrap(), "1.6");
+        assert_eq!(client.calls_made().unwrap(), 1);
+
+        let requests = stream_handle.written_requests();
+        assert_eq!(requests.len(), 1);
+        assert_server_version_request(&requests[0]);
     }
 
     #[test]

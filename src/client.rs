@@ -416,6 +416,11 @@ impl ElectrumApi for Client {
     }
 
     #[inline]
+    fn protocol_version(&self) -> Result<String, Error> {
+        impl_inner_call!(self, protocol_version)
+    }
+
+    #[inline]
     fn mempool_get_info(&self) -> Result<MempoolInfoRes, Error> {
         impl_inner_call!(self, mempool_get_info)
     }
