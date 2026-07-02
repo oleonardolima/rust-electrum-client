@@ -803,7 +803,7 @@ impl<S: Read + Write> RawClient<S> {
         let req = req.with_auth(authorization);
 
         let mut raw = serde_json::to_vec(&req)?;
-        trace!("==> {}", String::from_utf8_lossy(&raw));
+        trace!("==> {}", serde_json::to_string(&req.redacted())?);
 
         raw.extend_from_slice(b"\n");
         let mut stream = self.stream.lock()?;

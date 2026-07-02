@@ -62,6 +62,9 @@ impl Display for EstimationMode {
     }
 }
 
+/// Placeholder that replaces the authorization token in log output.
+pub(crate) const REDACTED_AUTHORIZATION: &str = "<REDACTED>";
+
 #[derive(Serialize, Clone)]
 /// A request that can be sent to the server
 pub struct Request<'a> {
@@ -103,6 +106,18 @@ impl<'a> Request<'a> {
     pub fn with_auth(mut self, authorization: Option<String>) -> Self {
         self.authorization = authorization;
         self
+    }
+
+    /// Returns a copy of this [`Request`] with the authorization token replaced by
+    /// [`REDACTED_AUTHORIZATION`], safe to log.
+    pub(crate) fn redacted(&self) -> Self {
+        Self {
+            authorization: self
+                .authorization
+                .as_ref()
+                .map(|_| REDACTED_AUTHORIZATION.to_string()),
+            ..self.clone()
+        }
     }
 }
 
@@ -531,7 +546,7 @@ impl From<std::sync::mpsc::RecvError> for Error {
 mod tests {
     use crate::ScriptStatus;
 
-    use super::{Param, Request};
+    use super::{Param, Request, REDACTED_AUTHORIZATION};
 
     #[test]
     fn script_status_roundtrip() {
@@ -594,5 +609,35 @@ mod tests {
         );
         assert!(parsed["params"].is_array());
         assert_eq!(parsed["params"][0], "test-scripthash");
+    }
+
+    #[test]
+    fn test_request_redacted_with_authorization() {
+        let req = Request::new_id(
+            42,
+            "blockchain.scripthash.get_balance",
+            vec![Param::String("test-scripthash".to_string())],
+        )
+        .with_auth(Some("Bearer secret-token".to_string()));
+
+        let json = serde_json::to_string(&req.redacted()).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["authorization"], REDACTED_AUTHORIZATION);
+        assert!(!json.contains("secret-token"));
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["id"], 42);
+        assert_eq!(parsed["method"], "blockchain.scripthash.get_balance");
+        assert_eq!(parsed["params"][0], "test-scripthash");
+    }
+
+    #[test]
+    fn test_request_redacted_without_authorization() {
+        let req = Request::new_id(1, "server.version", vec![]);
+
+        assert_eq!(
+            serde_json::to_string(&req.redacted()).unwrap(),
+            serde_json::to_string(&req).unwrap()
+        );
     }
 }
