@@ -462,20 +462,28 @@ impl RawClient<ElectrumSslStream> {
             rustls::crypto::CryptoProvider::install_default(
                 rustls::crypto::aws_lc_rs::default_provider(),
             )
-            .map_err(|_| {
-                Error::CouldNotCreateConnection(rustls::Error::General(
-                    "Failed to install CryptoProvider".to_string(),
-                ))
+            .or_else(|_| {
+                rustls::crypto::CryptoProvider::get_default()
+                    .map(|_| ())
+                    .ok_or_else(|| {
+                        Error::CouldNotCreateConnection(rustls::Error::General(
+                            "Failed to install CryptoProvider".to_string(),
+                        ))
+                    })
             })?;
 
             #[cfg(feature = "rustls-ring")]
             rustls::crypto::CryptoProvider::install_default(
                 rustls::crypto::ring::default_provider(),
             )
-            .map_err(|_| {
-                Error::CouldNotCreateConnection(rustls::Error::General(
-                    "Failed to install CryptoProvider".to_string(),
-                ))
+            .or_else(|_| {
+                rustls::crypto::CryptoProvider::get_default()
+                    .map(|_| ())
+                    .ok_or_else(|| {
+                        Error::CouldNotCreateConnection(rustls::Error::General(
+                            "Failed to install CryptoProvider".to_string(),
+                        ))
+                    })
             })?;
         }
 
