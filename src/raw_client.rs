@@ -912,7 +912,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn batch_call(&self, batch: &Batch) -> Result<Vec<serde_json::Value>, Error> {
-        let mut raw = Vec::new();
+        let mut requests = Vec::new();
 
         let mut missing_responses = Vec::new();
         let mut answers = BTreeMap::new();
@@ -951,15 +951,27 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
             self.waiting_map.lock()?.insert(req.id, sender);
 
-            raw.append(&mut serde_json::to_vec(&req)?);
-            raw.extend_from_slice(b"\n");
+            requests.push(req);
         }
 
         if missing_responses.is_empty() {
             return Ok(vec![]);
         }
 
-        trace!("==> {}", String::from_utf8_lossy(&raw));
+        let mut raw = Vec::new();
+        for req in &requests {
+            raw.append(&mut serde_json::to_vec(req)?);
+            raw.extend_from_slice(b"\n");
+        }
+
+        trace!(
+            "==> {}",
+            requests
+                .iter()
+                .map(|req| serde_json::to_string(&req.redacted()))
+                .collect::<Result<Vec<String>, _>>()?
+                .join("\n")
+        );
 
         let mut stream = self.stream.lock()?;
         stream.write_all(&raw)?;
