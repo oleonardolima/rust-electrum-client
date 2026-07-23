@@ -10,6 +10,7 @@ use bitcoin::consensus::encode::{deserialize, serialize};
 use bitcoin::{block, Script, Transaction, Txid};
 
 use crate::batch::Batch;
+use crate::raw_client::{CLIENT_NAME, PROTOCOL_VERSION_MAX, PROTOCOL_VERSION_MIN};
 use crate::types::*;
 
 impl<E: Deref> ElectrumApi for E
@@ -179,6 +180,10 @@ where
 
     fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
         (**self).server_features()
+    }
+
+    fn protocol_version(&self) -> Result<String, Error> {
+        (**self).protocol_version()
     }
 
     fn mempool_get_info(&self) -> Result<MempoolInfoRes, Error> {
@@ -443,6 +448,29 @@ pub trait ElectrumApi {
 
     /// Returns the capabilities of the server.
     fn server_features(&self) -> Result<ServerFeaturesRes, Error>;
+
+    /// Returns the negotiated Electrum protocol version.
+    ///
+    /// Clients that already negotiated a protocol version during connection setup
+    /// should return that cached value. Implementors that do not cache it can use
+    /// this default implementation, which retrieves the version with
+    /// `server.version`.
+    fn protocol_version(&self) -> Result<String, Error> {
+        let version_range = vec![
+            PROTOCOL_VERSION_MIN.to_string(),
+            PROTOCOL_VERSION_MAX.to_string(),
+        ];
+        let result = self.raw_call(
+            "server.version",
+            vec![
+                Param::String(CLIENT_NAME.to_string()),
+                Param::StringVec(version_range),
+            ],
+        )?;
+        let response: ServerVersionRes = serde_json::from_value(result)?;
+
+        Ok(response.protocol_version)
+    }
 
     /// Returns information about the current state of the mempool.
     ///
