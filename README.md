@@ -10,6 +10,10 @@
 
 Bitcoin Electrum client library. Supports plaintext, TLS and Onion servers.
 
+## Security Policy
+
+To report a security issue, please refer to the [security policy](SECURITY.md).
+
 ## Minimum Supported Rust Version (MSRV)
 
 This library should compile with any combination of features with Rust 1.75.0.
